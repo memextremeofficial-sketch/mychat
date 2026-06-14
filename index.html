@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta charset="UTF-8">
+    <title>P2P Pro Messenger</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; }
+        body { background: #121212; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* INLOGSCHERM */
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b0b0f; display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
+        .login-card { background: #1a1a24; padding: 35px 25px; border-radius: 20px; border: 1px solid #2d2d3d; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+        .login-card h3 { color: #2f80ed; margin-bottom: 10px; font-size: 1.6em; font-weight: 600; }
+        .login-card p { color: #7e7e9a; font-size: 0.9em; margin-bottom: 25px; }
+
+        /* INKOMEND CHATVERZOEK POP-UP */
+        #request-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 4000; padding: 20px; }
+        .request-card { background: #1a1a24; padding: 25px; border-radius: 16px; border: 1px solid #2f80ed; width: 100%; max-width: 340px; text-align: center; }
+        .request-card h4 { color: #2f80ed; font-size: 1.3em; margin-bottom: 10px; }
+        .request-btn-row { display: flex; gap: 10px; margin-top: 20px; }
+
+        /* HOOFDSCHERM */
+        #app-content { display: none; width: 100%; height: 100vh; flex-direction: column; background: #14141b; }
+        .app-bar { background: #1a1a24; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2d2d3d; z-index: 10; }
+        .app-bar-left { display: flex; flex-direction: column; gap: 2px; }
+        .app-bar-title { font-weight: 700; color: #ffffff; font-size: 1.15em; }
+        .my-id-display { font-family: monospace; font-size: 0.85em; color: #20e3b2; font-weight: bold; background: #252532; padding: 3px 8px; border-radius: 6px; border: 1px solid #2d2d3d; cursor: pointer; }
+        .settings-btn { background: none; border: none; font-size: 1.3em; cursor: pointer; color: #9aa0a6; }
+
+        /* HOMESCREEN MET CHATS */
+        #home-screen { flex: 1; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        .screen-title { font-size: 0.85em; color: #7e7e9a; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .chat-list-item { background: #1a1a24; padding: 15px; border-radius: 14px; border: 1px solid #2d2d3d; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: pointer; }
+        .chat-list-info { display: flex; flex-direction: column; gap: 4px; }
+        .chat-list-name { font-weight: 600; color: #ffffff; }
+        .chat-list-status { font-size: 0.8em; color: #7e7e9a; font-weight: 500; }
+        .chat-list-status.pending { color: #f1c40f; }
+        .chat-list-status.accepted { color: #2ecc71; }
+
+        /* CHATSCHERM */
+        #chat-screen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        #chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background-color: #14141b; background-size: cover; background-position: center; }
+        
+        /* BERICHTENBUBBELS & STATUS VINKJES / ERROR */
+        .msg { padding: 10px 14px; border-radius: 16px; max-width: 75%; line-height: 1.4; word-break: break-all; font-size: 0.95em; box-shadow: 0 2px 5px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
+        .msg.me { background: #2f80ed; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .msg.them { background: #252532; color: #e2e2e2; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .msg strong { font-size: 0.85em; display: block; margin-bottom: 3px; color: #b0cfff; }
+        .msg.them strong { color: #a6e3a1; }
+        
+        /* Footer van de bubbel: tijd + vinkjes */
+        .msg-footer { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 5px; font-size: 0.7em; opacity: 0.8; }
+        .msg-footer .time { opacity: 0.7; }
+        .tick { font-weight: bold; font-size: 1.1em; color: #a6adc8; }
+        .tick.delivered { color: #a6adc8; }
+        .tick.read { color: #54a0ff; } /* Blauwe vinkjes */
+        .msg-error { color: #e74c3c; font-weight: bold; font-size: 1.1em; } /* Rood uitroepteken */
+        
+        /* MULTIMEDIA */
+        .chat-img { max-width: 100%; max-height: 220px; border-radius: 10px; margin-top: 5px; display: block; }
+        .file-link { display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px; color: #2f80ed; text-decoration: none; font-weight: 500; font-size: 0.9em; margin-top: 5px; }
+        audio { max-width: 100%; margin-top: 5px; border-radius: 8px; outline: none; }
+
+        /* INPUT AREA */
+        .input-container { background: #1a1a24; padding: 12px; border-top: 1px solid #2d2d3d; display: flex; flex-direction: column; gap: 8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+        .flex-row { display: flex; gap: 6px; align-items: center; width: 100%; }
+        input[type=text] { flex: 1; padding: 12px 16px; border: 1px solid #2d2d3d; border-radius: 24px; background: #252532; color: #e0e0e0; font-size: 16px; min-width: 0; }
+        input[type=text]:focus { border-color: #2f80ed; outline: none; }
+        
+        /* PERFECT RONDE KNOPPEN */
+        .round-btn { width: 42px; height: 42px; min-width: 42px; min-height: 42px; border-radius: 50%; border: none; display: flex; justify-content: center; align-items: center; font-size: 1.15em; cursor: pointer; color: white; flex-shrink: 0; transition: background 0.2s; }
+        .btn-blue { background: #2f80ed; } .btn-gray { background: #2d2d3d; color: #a0a0b0; }
+        .btn-red { background: #e74c3c; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+        
+        /* INSTELLINGS PANEL */
+        .panel { background: #1a1a24; padding: 16px; border-bottom: 1px solid #2d2d3d; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 12px; }
+        .panel-section { border-bottom: 1px solid #2d2d3d; padding-bottom: 10px; margin-bottom: 5px; }
+        .panel-title { font-size: 0.8em; color: #9aa0a6; text-transform: uppercase; font-weight: bold; margin-bottom: 6px; }
+        .panel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 5px; }
+        .bg-dot { height: 35px; border-radius: 8px; cursor: pointer; }
+        .sec-btn { background: #2d2d3d; color: white; border: none; padding: 10px; font-weight: 600; border-radius: 6px; cursor: pointer; width: 100%; font-size: 13px; }
+
+        /* FLOATING TOAST NOTIFICATIE */
+        #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: #252532; color: #20e3b2; border: 1px solid #2d2d3d; padding: 12px 24px; border-radius: 30px; font-size: 0.9em; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.4); opacity: 0; pointer-events: none; transition: all 0.3s ease; z-index: 2000; }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+    <!-- LUXE INLOGSCHERM -->
+    <div id="login-overlay">
+        <div class="login-card">
+            <h3>P2P Messenger Pro</h3>
+            <p>Kies een chatnaam om je vaste, unieke User ID te registreren in de cloud.</p>
+            <input type="text" id="username-input" placeholder="Kies je chatnaam..." style="width:100%; padding:14px; border-radius:10px; background:#252532; border:1px solid #2d2d3d; color:white; font-size:16px; margin-bottom:20px; text-align:center;">
+            <button onclick="saveProfile()" style="width: 100%; padding:14px; border-radius:10px; background:#2f80ed; color:white; border:none; font-weight:bold; font-size:16px; cursor:pointer;">Start Chat</button>
+        </div>
+    </div>
+
+    <!-- INKOMEND CHATVERZOEK POP-UP OVERLAY -->
+    <div id="request-overlay">
+        <div class="request-card">
+            <h4>Inkomend Chatverzoek!</h4>
+            <p id="request-text" style="color: #a6adc8; margin-top: 10px; font-size: 0.95em;"></p>
+            <div class="request-btn-row">
+                <button onclick="rejectChatRequest()" style="background: #e74c3c; flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; color: white; border: none; cursor: pointer;">Weigeren</button>
+                <button onclick="acceptChatRequest()" style="background: #2ecc71; flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; color: white; border: none; cursor: pointer;">Accepteren</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IN-APP NOTIFICATIE BALK -->
+    <div id="msg-notification-banner" style="position: fixed; top: -80px; left: 15px; right: 15px; background: #1a1a24; border: 1px solid #2f80ed; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 5000; transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;">
+        <div style="font-size: 1.4em;">💬</div>
+        <div style="flex: 1; min-width: 0;">
+            <div id="notif-sender" style="font-weight: bold; color: #ffffff; font-size: 0.9em; margin-bottom: 2px;">Naam</div>
+            <div id="notif-text" style="color: #a6adc8; font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Bericht...</div>
+        </div>
+    </div>
+
+    <!-- HOOFDAPPLICATIE -->
+    <div id="app-content">
+        <!-- APP BAR MET VASTE ID-DISPLAY -->
+        <div class="app-bar">
+            <div class="app-bar-left">
+                <span class="app-bar-title" id="chat-title">P2P Messenger</span>
+                <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                    <span style="font-size:0.75em; color:#7e7e9a;">Mijn ID:</span>
+                    <span id="my-id-display" class="my-id-display" onclick="copyMyID()">------</span>
+                </div>
+            </div>
+            <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+        </div>
+        
+        <!-- INSTELLINGS- EN KOPPELPANEL -->
+        <div id="settings-panel" class="panel" style="display:none;">
+            <div class="panel-section" id="connect-section">
+                <div class="panel-title">Nieuwe chat starten met ID</div>
+                <div class="flex-row">
+                    <input type="text" id="peer-id-input" placeholder="Voer 6-cijferig ID van vriend in...">
+                    <button onclick="connectToPeer()" style="padding:10px 16px; font-size:14px; border-radius:20px;">Verstuur Verzoek</button>
+                </div>
+            </div>
+
+            <!-- Achtergronden -->
+            <div class="panel-section">
+                <div class="panel-title">Kies Achtergrond Theme</div>
+                <div class="panel-grid">
+                    <div class="bg-dot" style="background:#14141b;" onclick="changeBg('#14141b', '')"></div>
+                    <div class="bg-dot" style="background:#0f172a;" onclick="changeBg('#0f172a', '')"></div>
+                    <div class="bg-dot" style="background:#1c1917;" onclick="changeBg('#1c1917', '')"></div>
+                    <div class="bg-dot" style="background:#701a75;" onclick="changeBg('#701a75', '')"></div>
+                </div>
+                <input type="file" id="bg-upload" accept="image/*" style="display:none;" onchange="uploadBg(this)">
+                <button class="sec-btn" onclick="document.getElementById('bg-upload').click()" style="margin-top:10px;">Upload Eigen Foto</button>
+            </div>
+        </div>
+
+        <!-- STANDAARD HOMESCREEN: CONTACTEN / CHATS -->
+        <div id="home-screen">
+            <div class="screen-title">Mijn Chats & Contacten</div>
+            <div id="active-chats-list">
+                <div style="text-align:center; color:#7e7e9a; margin-top:30px; font-size:0.9em; padding:10px;" id="no-chats-msg">
+                    Nog geen actieve chats.<br>Klik op het tandwiel (⚙️) om een ID toe te voegen!
+                </div>
+            </div>
+        </div>
+        
+        <!-- CHATSCHERM -->
+        <div id="chat-screen">
+            <div id="chat-box"></div>
+            
+            <!-- BERICHTEN INVOER -->
+            <div class="input-container">
+                <div class="flex-row">
+                    <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="sendPhoto(this)">
+                    <input type="file" id="file-input" accept="*" style="display:none;" onchange="sendFile(this)">
+                    
+                    <button class="round-btn btn-gray" onclick="document.getElementById('photo-input').click()">📷</button>
+                    <button class="round-btn btn-gray" onclick="document.getElementById('file-input').click()">📁</button>
+                    <button id="mic-btn" class="round-btn btn-gray" onclick="toggleAudioRecord()">🎙️</button>
+                    
+                    <input type="text" id="msg-input" placeholder="Typ een veilig bericht..." onkeypress="handleKey(event)">
+                    <button id="send-btn" class="round-btn btn-blue" onclick="sendMsg()">➔</button>
+                </div>
+                <button class="sec-btn" onclick="backToHome()" style="margin-top:5px; padding:6px; background:#252532;">⬅ Sluit Chat & Terug naar Lijst</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FLOATING TOAST NOTIFICATIE -->
+    <div id="toast">📋 ID gekopieerd naar klembord!</div>
+<script>
+    var myId = localStorage.getItem('sig_chat_fixed_id'), username = localStorage.getItem('sig_chat_name');
+    var activeChats = JSON.parse(localStorage.getItem('sig_active_chats') || '{}');
+    var currentChatPeerId = null;
+    var mediaRecorder = null, audioChunks = [];
+    var lastCheckedTimestamp = Date.now();
+
+    // Genereer eenmalig een permanent uniek 6-cijferig User ID
+    if (!myId) {
+        myId = Math.floor(100000 + Math.random() * 900000).toString();
+        localStorage.setItem('sig_chat_fixed_id', myId);
+    }
+
+    // ONZE CENTRALE INTERNET DATABASE (KOGELVRIJE HTTPS REST ENGINE)
+    const DB_URL = "https://firebasedatabase.app";
+
+    window.onload = function() {
+        if (localStorage.getItem('chat_bg_color')) {
+            changeBg(localStorage.getItem('chat_bg_color'), localStorage.getItem('chat_bg_img') || '');
+        }
+        if (username && username.length > 0) {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app-content').style.display = 'flex';
+            document.getElementById('my-id-display').innerText = myId;
+            registerUserInCloud();
+            startInternetPolling();
+            renderChatList();
+        }
+        document.body.addEventListener('click', forceFullscreen);
+    };
+
+    function forceFullscreen() {
+        var docElm = document.documentElement;
+        if (docElm.requestFullscreen) docElm.requestFullscreen();
+        else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
+    }
+
+    function saveProfile() {
+        var inputField = document.getElementById('username-input');
+        if (!inputField) return;
+        var input = inputField.value.trim();
+        if (!input || input.length < 1) {
+            alert("⚠️ Vul een chatnaam in om door te gaan!");
+            return;
+        }
+        username = input;
+        localStorage.setItem('sig_chat_name', username);
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('app-content').style.display = 'flex';
+        document.getElementById('my-id-display').innerText = myId;
+        
+        registerUserInCloud();
+        startInternetPolling();
+        renderChatList();
+        forceFullscreen();
+    }
+
+    // 1. DATABASE REGISTRATIE: KOPPELT JOUW NAAM AAN JOUW NUMMER IN DE CLOUD
+    function registerUserInCloud() {
+        var url = DB_URL + "users/" + myId + ".json";
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", url, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify({ name: username, online: true }));
+    }
+
+    // 2. INTERNET LUISTER ENGINE (POLLING): CONTROLEERT WIFI / 4G / 5G OP ACTIEVE VERZOEKEN EN APPJES
+    function startInternetPolling() {
+        setInterval(function() {
+            // Vraag alleen berichten op die specifiek naar JOUW unieke 6-cijferige brievenbus zijn gestuurd
+            var url = DB_URL + "inbox/" + myId + ".json?orderBy=\"timestamp\"&startAt=" + lastCheckedTimestamp;
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url, true);
+            xhr.onload = function() {
+                if (xhr.status === 200 && xhr.responseText !== "null" && xhr.responseText !== "") {
+                    var messages = JSON.parse(xhr.responseText);
+                    Object.keys(messages).forEach(function(msgId) {
+                        var data = messages[msgId];
+                        
+                        // Zorg dat we dit specifieke unieke bericht ID maar één keer verwerken
+                        if (document.getElementById("msg-tick-" + data.msgId) || localStorage.getItem("processed_" + data.msgId)) return;
+                        localStorage.setItem("processed_" + data.msgId, "true");
+                        lastCheckedTimestamp = Math.max(lastCheckedTimestamp, data.timestamp + 1);
+
+                        // A. AFHANDELING INKOMEND CHATVERZOEK
+                        if (data.type === 'chat_request') {
+                            document.getElementById('request-text').innerText = data.user + " (" + data.senderId + ") staat in het systeem en wil een chat starten.";
+                            document.getElementById('request-overlay').style.display = 'flex';
+                            window.incomingRequestData = data;
+                            return;
+                        }
+
+                        // B. AFHANDELING CHAT ACCEPTATIE VAN DE ANDER
+                        if (data.type === 'chat_accepted') {
+                            if (activeChats[data.senderId]) {
+                                activeChats[data.senderId].status = 'accepted';
+                                activeChats[data.senderId].name = data.user;
+                                localStorage.setItem('sig_active_chats', JSON.stringify(activeChats));
+                                renderChatList();
+                            }
+                            return;
+                        }
+
+                        // C. AFHANDELING LIVE STATUS VINKJES EN GELEZEN MELDINGEN
+                        if (data.type === 'delivery_receipt' || data.type === 'read_receipt') {
+                            var tickEl = document.getElementById("msg-tick-" + data.targetMsgId);
+                            if (tickEl) {
+                                if (data.type === 'read_receipt') {
+                                    tickEl.innerText = "✓✓"; tickEl.className = "tick read";
+                                } else if (tickEl.innerText === "...") {
+                                    tickEl.innerText = "✓✓";
+                                }
+                            }
+                            return;
+                        }
+
+                        // D. AFHANDELING REGULIERE BERICHTEN (TEKST / AUDIO / FOTO / FILE)
+                        if (activeChats[data.senderId] && activeChats[data.senderId].status === 'accepted') {
+                            saveMessageToHistory(data.senderId, data.user, data.text, 'them', data.type, data.fileName, data.msgId);
+                            
+                            if (currentChatPeerId === data.senderId) {
+                                displayMessage(data.user, data.text, 'them', data.type, data.fileName, data.msgId);
+                                sendReceipt('read_receipt', data.senderId, data.msgId); // Direct blauw vinkje terugsturen
+                            } else {
+                                sendReceipt('delivery_receipt', data.senderId, data.msgId); // Dubbel grijs vinkje terugsturen
+                                triggerInAppNotification(data.user, data.text, data.senderId);
+                            }
+                        }
+                    });
+                }
+            };
+            xhr.send();
+        }, 1500); // Check elke 1.5 seconde kogelvrij over internet
+    }
+
+    function acceptChatRequest() {
+        if (!window.incomingRequestData) return;
+        var d = window.incomingRequestData;
+        activeChats[d.senderId] = { id: d.senderId, name: d.user, status: 'accepted' };
+        localStorage.setItem('sig_active_chats', JSON.stringify(activeChats));
+        renderChatList();
+        
+        sendRawPayload({ user: username, type: 'chat_accepted', msgId: "acc_" + Date.now() }, d.senderId);
+        document.getElementById('request-overlay').style.display = 'none';
+        window.incomingRequestData = null;
+    }
+
+    function rejectChatRequest() {
+        document.getElementById('request-overlay').style.display = 'none';
+        window.incomingRequestData = null;
+    }
+
+    function showToast() {
+        var toast = document.getElementById('toast');
+        toast.className = "show";
+        setTimeout(function() { toast.className = ""; }, 2000);
+    }
+
+    function copyMyID() {
+        navigator.clipboard.writeText(myId).then(showToast).catch(function() {
+            var t = document.createElement("textarea"); t.value = myId;
+            document.body.appendChild(t); t.select(); document.execCommand("copy");
+            document.body.removeChild(t); showToast();
+        });
+    }
+    // CHATGESCHIEDENIS DATABASE ENGINE PER CHAT ID
+    function saveMessageToHistory(chatId, senderName, textData, side, msgType, fName, msgId) {
+        var historyKey = "sig_history_with_" + chatId;
+        var chatHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        chatHistory.push({
+            id: msgId,
+            sender: senderName,
+            text: textData,
+            side: side,
+            type: msgType,
+            fileName: fName
+        });
+        localStorage.setItem(historyKey, JSON.stringify(chatHistory));
+    }
+
+    function loadChatHistory(chatId) {
+        let chatBox = document.getElementById('chat-box');
+        chatBox.innerHTML = ""; 
+        var historyKey = "sig_history_with_" + chatId;
+        var chatHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        
+        chatHistory.forEach(function(msg) {
+            displayMessage(msg.sender, msg.text, msg.side, msg.type, msg.fileName, msg.id);
+            var msgEl = document.getElementById("msg-tick-" + msg.id);
+            if(msgEl && msg.side === 'me') {
+                msgEl.innerText = "✓✓";
+                msgEl.className = "tick read";
+            }
+        });
+    }
+
+    function renderChatList() {
+        var listContainer = document.getElementById('active-chats-list');
+        var keys = Object.keys(activeChats);
+        
+        if (keys.length > 0) {
+            listContainer.innerHTML = "";
+            keys.forEach(function(key) {
+                var item = activeChats[key];
+                var div = document.createElement('div');
+                div.className = 'chat-list-item';
+                div.onclick = function() { resumeChat(item.id); };
+                
+                var statusText = "• Tik om te chatten";
+                var statusClass = "";
+                if (item.status === 'pending') {
+                    statusText = "• Uitnodiging verzonden (Wacht op acceptatie...)";
+                    statusClass = "pending";
+                } else if (item.status === 'accepted') {
+                    statusText = "• Verbonden / Chat actief";
+                    statusClass = "accepted";
+                }
+
+                div.innerHTML = `
+                    <div class="chat-list-info">
+                        <span class="chat-list-name">${item.name}</span>
+                        <span class="chat-list-status ${statusClass}" id="status-id-${item.id}">${statusText}</span>
+                    </div>
+                    <span style="color:#7e7e9a; font-size:1.1em;">➔</span>
+                `;
+                listContainer.appendChild(div);
+            });
+        } else {
+            listContainer.innerHTML = `
+                <div style="text-align:center; color:#7e7e9a; margin-top:30px; font-size:0.9em; padding:10px;" id="no-chats-msg">
+                    Nog geen actieve chats.<br>Klik op het tandwiel (⚙️) om een ID toe te voegen!
+                </div>`;
+        }
+    }
+
+    // LUXE INTERNET ID CHECK (KIJKT DIRECT IN DE CLOUD DATABASE OF HET ID BESTAAT)
+    function connectToPeer() {
+        var peerId = document.getElementById('peer-id-input').value.trim();
+        
+        if (!/^\d{6}$/.test(peerId)) {
+            alert("⚠️ Ongeldig ID! Voer een exact 6-cijferig nummer in.");
+            return;
+        }
+        if (peerId === myId) return alert("Je kunt niet met jezelf chatten!");
+        
+        // Controleer via HTTPS in de cloud of deze user geregistreerd staat
+        var checkUrl = DB_URL + "users/" + peerId + ".json";
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", checkUrl, true);
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.responseText !== "null" && xhr.responseText !== "") {
+                var userData = JSON.parse(xhr.responseText);
+                var realName = userData.name || ("Gebruiker " + peerId);
+                
+                // Gebruiker bestaat! Maak de chat aan in de 'pending' status
+                activeChats[peerId] = { id: peerId, name: realName, status: 'pending' };
+                localStorage.setItem('sig_active_chats', JSON.stringify(activeChats));
+                renderChatList();
+
+                // Stuur het chatverzoek via internet naar de brievenbus van de ontvanger
+                sendRawPayload({ user: username, type: 'chat_request', msgId: "req_" + Date.now() }, peerId);
+                openChatView(peerId);
+                document.getElementById('peer-id-input').value = "";
+                document.getElementById('settings-panel').style.display = 'none';
+            } else {
+                // Gebruiker bestaat NIET in de cloud database
+                alert("❌ Dit User ID is niet actief of bestaat niet! Controleer het nummer.");
+            }
+        };
+        xhr.send();
+    }
+
+    function resumeChat(id) {
+        openChatView(id);
+    }
+
+    function openChatView(targetPeerId) {
+        currentChatPeerId = targetPeerId; 
+        document.getElementById('home-screen').style.display = 'none';
+        document.getElementById('chat-screen').style.display = 'flex';
+        document.getElementById('chat-title').innerText = activeChats[targetPeerId] ? activeChats[targetPeerId].name : "Chat: " + targetPeerId;
+        loadChatHistory(targetPeerId);
+    }
+
+    function backToHome() {
+        currentChatPeerId = null; 
+        document.getElementById('chat-screen').style.display = 'none';
+        document.getElementById('home-screen').style.display = 'flex';
+        document.getElementById('chat-title').innerText = "P2P Messenger";
+        renderChatList();
+    }
+
+    // CLOUD DATABASE VERZEND MOTOR (DUMPT DE ENVELOPEN RECHTSTREEKS VIA INTERNET)
+    function sendRawPayload(payloadObj, targetId) {
+        payloadObj.senderId = myId;
+        payloadObj.timestamp = Date.now();
+        
+        // Gooi de envelop in de internet-brievenbus (inbox) van het gekozen ID
+        var url = DB_URL + "inbox/" + targetId + "/" + payloadObj.msgId + ".json";
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", url, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify(payloadObj));
+        return true;
+    }
+
+    function sendReceipt(type, targetId, msgId) {
+        var receiptId = "rcpt_" + Date.now() + "_" + Math.floor(Math.random() * 100);
+        sendRawPayload({ type: type, targetMsgId: msgId, msgId: receiptId }, targetId);
+    }
+
+    function sendNetworkPayload(payloadObj, msgId) {
+        var success = sendRawPayload(payloadObj, currentChatPeerId);
+        var msgEl = document.getElementById("msg-tick-" + msgId);
+        if (msgEl) {
+            if (!success) {
+                msgEl.innerText = "⚠️"; msgEl.className = "msg-error";
+            } else {
+                msgEl.innerText = "✓"; msgEl.className = "tick"; // Eén vinkje: verzonden naar cloud!
+            }
+        }
+    }
+
+    function sendMsg() {
+        let input = document.getElementById('msg-input');
+        let text = input.value.trim();
+        if (text !== "" && currentChatPeerId) {
+            var msgId = "msg_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+            saveMessageToHistory(currentChatPeerId, username, text, 'me', 'text', null, msgId);
+            displayMessage(username, text, 'me', 'text', null, msgId);
+            sendNetworkPayload({ user: username, text: text, type: 'text', msgId: msgId }, msgId);
+            input.value = "";
+        }
+    }
+
+    function toggleAudioRecord() {
+        var micBtn = document.getElementById('mic-btn');
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+            micBtn.className = "round-btn btn-gray"; micBtn.innerText = "🎙️";
+        } else {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = function(e) { audioChunks.push(e.data); };
+                mediaRecorder.onstop = function() {
+                    var audioBlob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var dataUrl = e.target.result;
+                        if(currentChatPeerId) {
+                            var msgId = "msg_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                            saveMessageToHistory(currentChatPeerId, username, dataUrl, 'me', 'audio', null, msgId);
+                            displayMessage(username, dataUrl, 'me', 'audio', null, msgId);
+                            sendNetworkPayload({ user: username, text: dataUrl, type: 'audio', msgId: msgId }, msgId);
+                        }
+                    };
+                    reader.readAsDataURL(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                mediaRecorder.start();
+                micBtn.className = "round-btn btn-red"; micBtn.innerText = "🛑";
+            }).catch(function(err) { alert("Microfoon toegang geweigerd: " + err); });
+        }
+    }
+    function sendPhoto(input) {
+        if(!input.files || input.files.length === 0 || !currentChatPeerId) return;
+        var file = input.files[0]; 
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var max_size = 500; 
+                var width = img.width, height = img.height;
+                if(width > height) { if(width > max_size) { height *= max_size / width; width = max_size; } }
+                else { if(height > max_size) { width *= max_size / height; height = max_size; } }
+                canvas.width = width; canvas.height = height;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                var dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                var msgId = "msg_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                
+                saveMessageToHistory(currentChatPeerId, username, dataUrl, 'me', 'image', null, msgId);
+                displayMessage(username, dataUrl, 'me', 'image', null, msgId);
+                sendNetworkPayload({ user: username, text: dataUrl, type: 'image', msgId: msgId }, msgId);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        input.value = '';
+    }
+
+    function sendFile(input) {
+        if(!input.files || input.files.length === 0 || !currentChatPeerId) return;
+        var file = input.files[0]; 
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var msgId = "msg_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+            
+            saveMessageToHistory(currentChatPeerId, username, e.target.result, 'me', 'file', file.name, msgId);
+            displayMessage(username, e.target.result, 'me', 'file', file.name, msgId);
+            sendNetworkPayload({ user: username, text: e.target.result, type: 'file', fileName: file.name, msgId: msgId }, msgId);
+        };
+        reader.readAsDataURL(file);
+        input.value = '';
+    }
+
+    function displayMessage(sender, text, side, type, fileName, msgId) {
+        let chatBox = document.getElementById('chat-box');
+        let div = document.createElement('div');
+        div.className = 'msg ' + side;
+        
+        let now = new Date();
+        let timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        
+        let contentHtml = `<strong>${sender}</strong>`;
+        if(type === 'image') {
+            contentHtml += `<img src="${text}" class="chat-img">`;
+        } else if(type === 'audio') {
+            contentHtml += `<audio src="${text}" controls></audio>`;
+        } else if(type === 'file') {
+            contentHtml += `<a href="${text}" download="${fileName}" class="file-link">📄 ${fileName}</a>`;
+        } else {
+            contentHtml += `<span>${text}</span>`;
+        }
+        
+        contentHtml += `<div class="msg-footer"><span class="time">${timeStr}</span>`;
+        if (side === 'me') {
+            contentHtml += `<span class="tick" id="msg-tick-${msgId}">...</span>`;
+        }
+        contentHtml += `</div>`;
+        
+        div.innerHTML = contentHtml;
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function toggleSettings() {
+        var panel = document.getElementById('settings-panel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    function changeBg(color, imgData) {
+        var box = document.getElementById('chat-box');
+        box.style.backgroundColor = color;
+        box.style.backgroundImage = imgData ? `url(${imgData})` : 'none';
+        localStorage.setItem('chat_bg_color', color);
+        localStorage.setItem('chat_bg_img', imgData || '');
+    }
+    
+    function uploadBg(input) {
+        if(!input.files || input.files.length === 0) return;
+        var reader = new FileReader();
+        reader.onload = function(e) { changeBg('#14141b', e.target.result); };
+        reader.readAsDataURL(input.files);
+    }
+    
+    function handleKey(e) { if(e.key === 'Enter') sendMsg(); }
+</script>
+</body>
+</html>

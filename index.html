@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Base</title>
+
+<style>
+body {
+  margin:0;
+  font-family: Arial;
+  background:#0b0b0b;
+  color:#eaeaea;
+}
+
+.container {
+  padding:20px;
+}
+
+input {
+  padding:12px;
+  width:80%;
+  background:#1a1a1a;
+  color:white;
+  border:1px solid #333;
+  border-radius:8px;
+}
+
+button {
+  padding:12px;
+  margin-top:10px;
+  background:#2a2a2a;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#3a3a3a;
+}
+
+.card {
+  margin-top:20px;
+  padding:15px;
+  background:#141414;
+  border-radius:10px;
+  border:1px solid #222;
+}
+
+small { opacity:0.7; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>💬 Chat Base</h2>
+
+<input id="name" placeholder="Enter name">
+<br>
+<button id="start">Start</button>
+
+<div class="card">
+  <small>Your ID:</small>
+  <div id="uid">loading...</div>
+</div>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
+import { getDatabase, ref, set }
+from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAoTdvfNM1Z5FJEaZLwUi8TLEp6zqGtlOU",
+  authDomain: "super-chat-c4f3d.firebaseapp.com",
+  databaseURL: "https://super-chat-c4f3d-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "super-chat-c4f3d",
+  storageBucket: "super-chat-c4f3d.firebasestorage.app",
+  messagingSenderId: "836747839041",
+  appId: "1:836747839041:web:095657e71616d2aee2a8c0",
+  measurementId: "G-SEFS3QEMJQ"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+let uid = null;
+
+signInAnonymously(auth).catch(console.error);
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) return;
+
+  uid = user.uid;
+  document.getElementById("uid").innerText = uid;
+});
+
+document.getElementById("start").onclick = () => {
+  const name = document.getElementById("name").value;
+  if (!name || !uid) return;
+
+  set(ref(db, "users/" + uid), {
+    name,
+    online: true
+  });
+};
+
+</script>
+
+</body>
+</html>
